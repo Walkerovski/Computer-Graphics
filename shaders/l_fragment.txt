@@ -1,0 +1,59 @@
+#version 330 core
+#extension GL_ARB_separate_shader_objects : enable
+#define MAX_LIGHT_COUNT 10
+
+struct GeometryData {
+    sampler2D position;
+    sampler2D diffuseSpecular;
+};
+
+struct Light {
+    vec3 position;
+    vec3 color;
+    float strength;
+};
+
+vec3 CalculatePointLight(Light light, vec3 cameraPosition, vec3 fragmentPosition, GeometryData fragment, vec2 texCoord) {
+    vec3 result = vec3(0.0);
+
+    //directions
+	vec3 lightDir = normalize(light.position - fragmentPosition);
+    vec3 viewDir = normalize(cameraPosition - fragmentPosition);
+    vec3 halfDir = normalize(lightDir + viewDir);
+
+    vec4 diffuseSpecular = texture(fragment.diffuseSpecular, texCoord);
+
+    //diffuse
+	result += light.color * max(0.0,dot(vec3(1, 1, 1), lightDir)) * diffuseSpecular.rgb;
+	
+    //specular
+    result += light.color * light.strength * pow(max(dot(vec3(0.5, 0.5, 0.5), halfDir), 0.0),32) * diffuseSpecular.a;
+    
+    return result;
+}
+
+layout (location=0) in vec2 fragmentTexCoord;
+
+uniform GeometryData fragmentData;
+uniform Light lights[MAX_LIGHT_COUNT];
+uniform vec3 ambient;
+uniform vec3 viewPos;
+uniform float lightCount;
+
+layout (location=0) out vec4 color;
+
+void main()
+{
+    vec3 lightLevel = vec3(0.0);
+
+    vec3 fragmentPos = texture(fragmentData.position, fragmentTexCoord).xyz;
+    
+    //ambient
+    lightLevel += ambient * texture(fragmentData.diffuseSpecular, fragmentTexCoord).rgb;
+
+    for (int i = 0; i < lightCount; i++) {
+        float distance = length(lights[i].position - fragmentPos);
+        lightLevel += CalculatePointLight(lights[i], viewPos, fragmentPos, fragmentData, fragmentTexCoord) / distance;
+    }
+    color = vec4(lightLevel, 1.0);
+}
